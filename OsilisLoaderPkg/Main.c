@@ -9,15 +9,23 @@
 #include <Protocol/SimpleFileSystem.h>
 #include <Uefi.h>
 
+// メモリマップ構造体
 struct MemoryMap {
+    // メモリマップを格納するバッファサイズ
     UINTN buffer_size;
+    // メモリマップを格納するバッファへのポインタ
     VOID* buffer;
+    // メモリマップのサイズ
     UINTN map_size;
+    // メモリマップのキー
     UINTN map_key;
+    // メモリマップエントリーのサイズ
     UINTN descriptor_size;
+    // メモリマップエントリーのバージョン
     UINT32 descriptor_version;
 };
 
+// UEFIからメモリマップを取得する
 EFI_STATUS
 GetMemoryMap(struct MemoryMap* map) {
     if (map->buffer == NULL) {
@@ -72,6 +80,7 @@ GetMemoryTypeUnicode(EFI_MEMORY_TYPE type) {
     }
 }
 
+// メモリマップをファイルに保存
 EFI_STATUS
 SaveMemoryMap(struct MemoryMap* map, EFI_FILE_PROTOCOL* file) {
     CHAR8 buf[256];
@@ -105,6 +114,7 @@ SaveMemoryMap(struct MemoryMap* map, EFI_FILE_PROTOCOL* file) {
     return EFI_SUCCESS;
 }
 
+// ファイルを開く準備
 EFI_STATUS
 OpenRootDir(EFI_HANDLE image_handle, EFI_FILE_PROTOCOL** root) {
     EFI_LOADED_IMAGE_PROTOCOL* loaded_image;
@@ -172,13 +182,18 @@ EFI_STATUS EFIAPI
 UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
     Print(L"Hello, Osilis World!\n");
 
+    // メモリマップの初期化
     CHAR8 memmap_buf[4096 * 4];
     struct MemoryMap memmap = { sizeof(memmap_buf), memmap_buf, 0, 0, 0, 0 };
+
+    // UEFIからメモリマップを取得する
     GetMemoryMap(&memmap);
 
+    // ファイルを開く準備
     EFI_FILE_PROTOCOL* root_dir;
     OpenRootDir(image_handle, &root_dir);
 
+    // "memmap"を開く
     EFI_FILE_PROTOCOL* memmap_file;
     root_dir->Open(root_dir,
                    &memmap_file,
@@ -186,6 +201,7 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
                    EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE,
                    0);
 
+    // メモリマップをファイルに保存
     SaveMemoryMap(&memmap, memmap_file);
     memmap_file->Close(memmap_file);
 
