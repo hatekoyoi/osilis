@@ -220,7 +220,7 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
     // UEFIからメモリマップを取得する
     status = GetMemoryMap(&memmap);
     if (EFI_ERROR(status)) {
-        Print("failed to get memory map: %r\n", status);
+        Print(L"failed to get memory map: %r\n", status);
         Halt();
     }
 
@@ -228,7 +228,7 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
     EFI_FILE_PROTOCOL* root_dir;
     status = OpenRootDir(image_handle, &root_dir);
     if (EFI_ERROR(status)) {
-        Print("failed to open root directory: %r\n", status);
+        Print(L"failed to open root directory: %r\n", status);
         Halt();
     }
 
@@ -352,7 +352,7 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
 
     // kernelのエントリーポイントを実行する
     UINT64 entry_addr = *(UINT64*)(kernel_base_addr + 24);
-    typedef void EntryPointType(UINT64, UINT64);
+    typedef void EntryPointType(const struct FrameBufferConfig*);
     EntryPointType* entry_point = (EntryPointType*)entry_addr;
     entry_point(&config);
 
