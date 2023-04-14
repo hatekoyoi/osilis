@@ -210,31 +210,46 @@ Halt(void) {
     }
 }
 
+// ELFファイルのロードアドレスの範囲を取得
 void
 CalcLoadAddressRange(Elf64_Ehdr* ehdr, UINT64* first, UINT64* last) {
+    // プログラムヘッダテーブルの先頭アドレスを計算
     Elf64_Phdr* phdr = (Elf64_Phdr*)((UINT64)ehdr + ehdr->e_phoff);
+
+    // ロードアドレスを初期化する
     *first = MAX_UINT64;
     *last = 0;
+
+    // プログラムヘッダテーブルをループしてロードアドレスの範囲を計算
     for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i) {
         if (phdr[i].p_type != PT_LOAD) {
             continue;
         }
+        // ロードアドレスの範囲を更新する
         *first = MIN(*first, phdr[i].p_vaddr);
         *last = MAX(*last, phdr[i].p_vaddr + phdr[i].p_memsz);
     }
 }
 
+// ELFファイルからロードセグメントをコピー
 void
 CopyLoadSegments(Elf64_Ehdr* ehdr) {
+    // プログラムヘッダテーブルの先頭アドレスを計算
     Elf64_Phdr* phdr = (Elf64_Phdr*)((UINT64)ehdr + ehdr->e_phoff);
+
+    // プログラムヘッダテーブルをループしてロードセグメントをコピー
     for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i) {
         if (phdr[i].p_type != PT_LOAD) {
             continue;
         }
 
+        // ファイル上のロードセグメントの先頭アドレスを計算
         UINT64 segm_in_file = (UINT64)ehdr + phdr[i].p_offset;
+
+        // ロードセグメントをメモリ上にコピー
         CopyMem((VOID*)phdr[i].p_vaddr, (VOID*)segm_in_file, phdr[i].p_filesz);
 
+        // ロードセグメントの残りの部分をゼロで埋める
         UINTN remain_bytes = phdr[i].p_memsz - phdr[i].p_filesz;
         SetMem((VOID*)(phdr[i].p_vaddr + phdr[i].p_filesz), remain_bytes, 0);
     }
@@ -345,10 +360,12 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
         Halt();
     }
 
+    // LoadされたKernelのメモリアドレス範囲を計算
     Elf64_Ehdr* kernel_ehdr = (Elf64_Ehdr*)kernel_buffer;
     UINT64 kernel_first_addr, kernel_last_addr;
     CalcLoadAddressRange(kernel_ehdr, &kernel_first_addr, &kernel_last_addr);
 
+    // ページ数を計算してメモリを割り当てる
     UINTN num_pages = (kernel_last_addr - kernel_first_addr + 0xfff) / 0x1000;
     status = gBS->AllocatePages(AllocateAddress, EfiLoaderData, num_pages, &kernel_first_addr);
     if (EFI_ERROR(status)) {
@@ -356,9 +373,12 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
         Halt();
     }
 
+    // Kernelを割り当てたメモリにコピーする
     CopyLoadSegments(kernel_ehdr);
+    // コピーしたKernelのメモリアドレス範囲を出力する
     Print(L"Kernel: 0x%0lx - 0x%0lx\n", kernel_first_addr, kernel_last_addr);
 
+    // Kernelを割り当てたメモリ領域以外のメモリを解放する
     status = gBS->FreePool(kernel_buffer);
     if (EFI_ERROR(status)) {
         Print(L"failed to free pool: %r\n", status);
