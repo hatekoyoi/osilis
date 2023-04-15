@@ -1,4 +1,4 @@
-#include <stddef.h>
+#include <errno.h>
 #include <sys/types.h>
 
 #ifndef _BSD_CADDR_T_
@@ -8,5 +8,6 @@ typedef char* caddr_t;
 
 caddr_t
 sbrk(int incr) {
-    return NULL;
+    errno = ENOMEM;
+    return (caddr_t)-1;
 }
