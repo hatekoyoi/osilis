@@ -1,7 +1,0 @@
-{
-    "files.associations": {
-        "uefi.h": "c",
-        "uefilib.h": "c",
-        "fileinfo.h": "c"
-    }
-}
