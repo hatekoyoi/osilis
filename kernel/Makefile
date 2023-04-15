@@ -1,6 +1,6 @@
 TARGET = kernel.elf
-OBJS = main.o graphics.o font.O2
-DEPENDS = $(join $(dir $(OBJS)),$(addprefix .,$(notdir $(OBJS:.o=.d)))))
+OBJS = main.o graphics.o font.o hankaku.o
+DEPENDS = $(join $(dir $(OBJS)),$(addprefix .,$(notdir $(OBJS:.o=.d))))
 
 CXXFLAGS += -O2 -Wall -g --target=x86_64-elf -ffreestanding -mno-red-zone \
 			-fno-exceptions -fno-rtti -std=c++17
@@ -21,11 +21,20 @@ kernel.elf: $(OBJS) Makefile
 	clang++ $(CPPFLAGS) $(CXXFLAGS) -c $<
 
 .%.d: %.cpp
-	clang++ $(CPPFLAGS) $(CXXFLAGS) -MM $< > $2
+	clang++ $(CPPFLAGS) $(CXXFLAGS) -MM $< > $@
 	$(eval OBJ = $(<:.cpp=.o))
-	sed --in-place 's|$(notdir $(OBJ))|$(OBJ)|' $2
+	sed --in-place 's|$(notdir $(OBJ))|$(OBJ)|' $@
 
-.PHONY: DEPENDS
+hankaku.bin: hankaku.txt
+	../tools/makefont.py -o $@ $<
+
+hankaku.o: hankaku.bin
+	objcopy -I binary -O elf64-x86-64 -B i386:x86-64 $< $@
+
+.%.d: %.bin
+	touch $@
+
+.PHONY: depends
 depends:
 	$(MAME) $(DEPENDS)
 
