@@ -90,22 +90,18 @@ SaveMemoryMap(struct MemoryMap* map, EFI_FILE_PROTOCOL* file) {
     CHAR8 buf[256];
     UINTN len;
 
-    CHAR8* header =
-        "Index, Type, Type(name), PhysicalStart, NumberOfPages, Attribute\n";
+    CHAR8* header = "Index, Type, Type(name), PhysicalStart, NumberOfPages, Attribute\n";
     len = AsciiStrLen(header);
     status = file->Write(file, &len, header);
     if (EFI_ERROR(status)) {
         return status;
     }
 
-    Print(L"map->buffer = %08lx, map->map_size = %08lx\n",
-          map->buffer,
-          map->map_size);
+    Print(L"map->buffer = %08lx, map->map_size = %08lx\n", map->buffer, map->map_size);
 
     EFI_PHYSICAL_ADDRESS iter;
     int i;
-    for (iter = (EFI_PHYSICAL_ADDRESS)map->buffer, i = 0;
-         iter < (EFI_PHYSICAL_ADDRESS)map->buffer + map->map_size;
+    for (iter = (EFI_PHYSICAL_ADDRESS)map->buffer, i = 0; iter < (EFI_PHYSICAL_ADDRESS)map->buffer + map->map_size;
          iter += map->descriptor_size, i++) {
         EFI_MEMORY_DESCRIPTOR* desc = (EFI_MEMORY_DESCRIPTOR*)iter;
         len = AsciiSPrint(buf,
@@ -163,11 +159,7 @@ OpenGOP(EFI_HANDLE image_handle, EFI_GRAPHICS_OUTPUT_PROTOCOL** gop) {
     // Graphics Output Protocol(GOP)のハンドルを取得
     UINTN num_gop_handles = 0;
     EFI_HANDLE* gop_handles = NULL;
-    status = gBS->LocateHandleBuffer(ByProtocol,
-                                     &gEfiGraphicsOutputProtocolGuid,
-                                     NULL,
-                                     &num_gop_handles,
-                                     &gop_handles);
+    status = gBS->LocateHandleBuffer(ByProtocol, &gEfiGraphicsOutputProtocolGuid, NULL, &num_gop_handles, &gop_handles);
     if (EFI_ERROR(status)) {
         return status;
     }
@@ -287,12 +279,8 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
 
     // "memmap"を開く
     EFI_FILE_PROTOCOL* memmap_file;
-    status = root_dir->Open(root_dir,
-                            &memmap_file,
-                            L"\\memmap",
-                            EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE |
-                                EFI_FILE_MODE_CREATE,
-                            0);
+    status = root_dir->Open(
+        root_dir, &memmap_file, L"\\memmap", EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0);
     if (EFI_ERROR(status)) {
         Print(L"failed to open file '\\memmap': %r\n", status);
         Print(L"Ignored.\n");
@@ -337,8 +325,7 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
 
     // kernelを開く
     EFI_FILE_PROTOCOL* kernel_file;
-    status = root_dir->Open(
-        root_dir, &kernel_file, L"\\kernel.elf", EFI_FILE_MODE_READ, 0);
+    status = root_dir->Open(root_dir, &kernel_file, L"\\kernel.elf", EFI_FILE_MODE_READ, 0);
     if (EFI_ERROR(status)) {
         Print(L"failed to open file '\\kernel.elf': %r\n", status);
         Halt();
@@ -347,8 +334,7 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
     // kernelのサイズを取得する
     UINTN file_info_size = sizeof(EFI_FILE_INFO) + sizeof(CHAR16) * 12;
     UINT8 file_info_buffer[file_info_size];
-    status = kernel_file->GetInfo(
-        kernel_file, &gEfiFileInfoGuid, &file_info_size, file_info_buffer);
+    status = kernel_file->GetInfo(kernel_file, &gEfiFileInfoGuid, &file_info_size, file_info_buffer);
     if (EFI_ERROR(status)) {
         Print(L"failed to get file information: %r\n", status);
         Halt();
@@ -376,8 +362,7 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
 
     // ページ数を計算してメモリを割り当てる
     UINTN num_pages = (kernel_last_addr - kernel_first_addr + 0xfff) / 0x1000;
-    status = gBS->AllocatePages(
-        AllocateAddress, EfiLoaderData, num_pages, &kernel_first_addr);
+    status = gBS->AllocatePages(AllocateAddress, EfiLoaderData, num_pages, &kernel_first_addr);
     if (EFI_ERROR(status)) {
         Print(L"failed to allocate pages: %r\n", status);
         Halt();
@@ -426,8 +411,7 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
             config.pixel_format = kPixelBGRResv8BitPerColor;
             break;
         default:
-            Print(L"Unimplemented pixel format: %d\n",
-                  gop->Mode->Info->PixelFormat);
+            Print(L"Unimplemented pixel format: %d\n", gop->Mode->Info->PixelFormat);
             Halt();
     }
 

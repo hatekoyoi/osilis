@@ -15,16 +15,13 @@ void
 BGRResv8BitPerColorPixelWriter::Write(int x, int y, const PixelColor& c) {
     // x,y座標に色情報を書き込む
     auto p = PixelAt(x, y);
-    p[0] = c.r;
+    p[0] = c.b;
     p[1] = c.g;
     p[2] = c.r;
 }
 
 void
-DrawRectangle(PixelWriter& writer,
-              const Vector2D<int>& pos,
-              const Vector2D<int>& size,
-              const PixelColor& c) {
+DrawRectangle(PixelWriter& writer, const Vector2D<int>& pos, const Vector2D<int>& size, const PixelColor& c) {
     for (int dx = 0; dx < size.x; ++dx) {
         writer.Write(pos.x + dx, pos.y, c);
         writer.Write(pos.x + dx, pos.y + size.y - 1, c);
@@ -36,10 +33,7 @@ DrawRectangle(PixelWriter& writer,
 }
 
 void
-FillRectangle(PixelWriter& writer,
-              const Vector2D<int>& pos,
-              const Vector2D<int>& size,
-              const PixelColor& c) {
+FillRectangle(PixelWriter& writer, const Vector2D<int>& pos, const Vector2D<int>& size, const PixelColor& c) {
     for (int dy = 0; dy < size.y; ++dy) {
         for (int dx = 0; dx < size.x; ++dx) {
             writer.Write(pos.x + dx, pos.y + dy, c);
