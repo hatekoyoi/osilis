@@ -6,7 +6,9 @@ class Console {
     public:
     static const int kRows = 25, kColums = 80;
 
-    Console(PixelWriter& writer, const PixelColor& fg_color, const PixelColor& bg_color);
+    Console(PixelWriter& writer,
+            const PixelColor& fg_color,
+            const PixelColor& bg_color);
     void PutString(const char* s);
 
     private:
