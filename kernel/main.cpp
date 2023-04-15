@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <new>
 
 void
 operator delete(void* obj) noexcept {}
