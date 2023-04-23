@@ -75,5 +75,4 @@ struct InterruptFrame {
     uint64_t ss;
 };
 
-void
-NotifyEndOfInterrupt();
+void __attribute__((no_caller_saved_registers)) NotifyEndOfInterrupt();

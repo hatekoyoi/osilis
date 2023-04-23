@@ -20,8 +20,7 @@ SetIDTEntry(InterruptDescriptor& desc,
     desc.segment_selector = segment_selector;
 }
 
-void
-NotifyEndOfInterrupt() {
+void __attribute__((no_caller_saved_registers)) NotifyEndOfInterrupt() {
     volatile auto end_of_interrupt = reinterpret_cast<uint32_t*>(0xfee000b0);
     *end_of_interrupt = 0;
 }
