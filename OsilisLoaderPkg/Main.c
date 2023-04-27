@@ -1,5 +1,6 @@
 #include "elf.hpp"
 #include "frame_buffer_config.hpp"
+#include "memory_map.hpp"
 #include <Guid/FileInfo.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/MemoryAllocationLib.h>
@@ -11,22 +12,6 @@
 #include <Protocol/LoadedImage.h>
 #include <Protocol/SimpleFileSystem.h>
 #include <Uefi.h>
-
-// メモリマップ構造体
-struct MemoryMap {
-    // メモリマップを格納するバッファサイズ
-    UINTN buffer_size;
-    // メモリマップを格納するバッファへのポインタ
-    VOID* buffer;
-    // メモリマップのサイズ
-    UINTN map_size;
-    // メモリマップのキー
-    UINTN map_key;
-    // メモリマップエントリーのサイズ
-    UINTN descriptor_size;
-    // メモリマップエントリーのバージョン
-    UINT32 descriptor_version;
-};
 
 // UEFIからメモリマップを取得する
 EFI_STATUS
@@ -101,7 +86,8 @@ SaveMemoryMap(struct MemoryMap* map, EFI_FILE_PROTOCOL* file) {
 
     EFI_PHYSICAL_ADDRESS iter;
     int i;
-    for (iter = (EFI_PHYSICAL_ADDRESS)map->buffer, i = 0; iter < (EFI_PHYSICAL_ADDRESS)map->buffer + map->map_size;
+    for (iter = (EFI_PHYSICAL_ADDRESS)map->buffer, i = 0;
+         iter < (EFI_PHYSICAL_ADDRESS)map->buffer + map->map_size;
          iter += map->descriptor_size, i++) {
         EFI_MEMORY_DESCRIPTOR* desc = (EFI_MEMORY_DESCRIPTOR*)iter;
         len = AsciiSPrint(buf,
@@ -159,7 +145,8 @@ OpenGOP(EFI_HANDLE image_handle, EFI_GRAPHICS_OUTPUT_PROTOCOL** gop) {
     // Graphics Output Protocol(GOP)のハンドルを取得
     UINTN num_gop_handles = 0;
     EFI_HANDLE* gop_handles = NULL;
-    status = gBS->LocateHandleBuffer(ByProtocol, &gEfiGraphicsOutputProtocolGuid, NULL, &num_gop_handles, &gop_handles);
+    status = gBS->LocateHandleBuffer(
+        ByProtocol, &gEfiGraphicsOutputProtocolGuid, NULL, &num_gop_handles, &gop_handles);
     if (EFI_ERROR(status)) {
         return status;
     }
@@ -279,8 +266,11 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
 
     // "memmap"を開く
     EFI_FILE_PROTOCOL* memmap_file;
-    status = root_dir->Open(
-        root_dir, &memmap_file, L"\\memmap", EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0);
+    status = root_dir->Open(root_dir,
+                            &memmap_file,
+                            L"\\memmap",
+                            EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE,
+                            0);
     if (EFI_ERROR(status)) {
         Print(L"failed to open file '\\memmap': %r\n", status);
         Print(L"Ignored.\n");
@@ -334,7 +324,8 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
     // kernelのサイズを取得する
     UINTN file_info_size = sizeof(EFI_FILE_INFO) + sizeof(CHAR16) * 12;
     UINT8 file_info_buffer[file_info_size];
-    status = kernel_file->GetInfo(kernel_file, &gEfiFileInfoGuid, &file_info_size, file_info_buffer);
+    status =
+        kernel_file->GetInfo(kernel_file, &gEfiFileInfoGuid, &file_info_size, file_info_buffer);
     if (EFI_ERROR(status)) {
         Print(L"failed to get file information: %r\n", status);
         Halt();
@@ -417,9 +408,9 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
 
     // kernelのエントリーポイントを実行する
     UINT64 entry_addr = *(UINT64*)(kernel_first_addr + 24);
-    typedef void EntryPointType(const struct FrameBufferConfig*);
+    typedef void EntryPointType(const struct FrameBufferConfig*, const struct MemoryMap*);
     EntryPointType* entry_point = (EntryPointType*)entry_addr;
-    entry_point(&config);
+    entry_point(&config, &memmap);
 
     Print(L"All done\n");
 

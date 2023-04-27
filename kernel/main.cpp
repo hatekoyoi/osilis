@@ -5,6 +5,7 @@
 #include "graphics.hpp"
 #include "interrupt.hpp"
 #include "logger.hpp"
+#include "memory_map.hpp"
 #include "mouse.hpp"
 #include "pci.hpp"
 #include "queue.hpp"
@@ -69,10 +70,7 @@ SwitchEhci2Xhci(const pci::Device& xhc_dev) {
     pci::WriteConfReg(xhc_dev, 0xd8, superspeed_ports);          // USB3_PSSEN
     uint32_t ehci2xhci_ports = pci::ReadConfReg(xhc_dev, 0xd4);  // XUSB2PRM
     pci::WriteConfReg(xhc_dev, 0xd0, ehci2xhci_ports);           // XUSB2PR
-    Log(kDebug,
-        "SwitchEhci2Xhci: SS = %02, xHCI = %02x\n",
-        superspeed_ports,
-        ehci2xhci_ports);
+    Log(kDebug, "SwitchEhci2Xhci: SS = %02, xHCI = %02x\n", superspeed_ports, ehci2xhci_ports);
 }
 
 usb::xhci::Controller* xhc;
@@ -93,46 +91,56 @@ IntHandlerXHCI(InterruptFrame* frame) {
 
 // カーネルエントリポイント
 extern "C" void
-KernelMain(const FrameBufferConfig& frame_buffer_config) {
+KernelMain(const FrameBufferConfig& frame_buffer_config, const MemoryMap& memory_map) {
     // ピクセルフォーマットに応じて、RGBまたはBGRのPixelWriterを作成
     switch (frame_buffer_config.pixel_format) {
         case kPixelRGBResv8BitPerColor:
-            pixel_writer = new (pixel_writer_buf)
-                RGBResv8BitPerColorPixelWriter{ frame_buffer_config };
+            pixel_writer =
+                new (pixel_writer_buf) RGBResv8BitPerColorPixelWriter{ frame_buffer_config };
             break;
         case kPixelBGRResv8BitPerColor:
-            pixel_writer = new (pixel_writer_buf)
-                BGRResv8BitPerColorPixelWriter{ frame_buffer_config };
+            pixel_writer =
+                new (pixel_writer_buf) BGRResv8BitPerColorPixelWriter{ frame_buffer_config };
             break;
     }
 
     const int kFrameWidth = frame_buffer_config.horizontal_resolution;
     const int kFrameHeight = frame_buffer_config.vertical_resolution;
 
-    FillRectangle(*pixel_writer,
-                  { 0, 0 },
-                  { kFrameWidth, kFrameHeight - 50 },
-                  { kDesktopBGColor });
-    FillRectangle(*pixel_writer,
-                  { 0, kFrameHeight - 50 },
-                  { kFrameWidth, 50 },
-                  { 1, 8, 17 });
-    FillRectangle(*pixel_writer,
-                  { 0, kFrameHeight - 50 },
-                  { kFrameWidth / 5, 50 },
-                  { 80, 80, 80 });
-    DrawRectangle(*pixel_writer,
-                  { 10, kFrameHeight - 40 },
-                  { 30, 30 },
-                  { 160, 160, 160 });
+    FillRectangle(*pixel_writer, { 0, 0 }, { kFrameWidth, kFrameHeight - 50 }, { kDesktopBGColor });
+    FillRectangle(*pixel_writer, { 0, kFrameHeight - 50 }, { kFrameWidth, 50 }, { 1, 8, 17 });
+    FillRectangle(*pixel_writer, { 0, kFrameHeight - 50 }, { kFrameWidth / 5, 50 }, { 80, 80, 80 });
+    DrawRectangle(*pixel_writer, { 10, kFrameHeight - 40 }, { 30, 30 }, { 160, 160, 160 });
 
-    console = new (console_buf)
-        Console{ *pixel_writer, kDesktopFGColor, kDesktopBGColor };
+    console = new (console_buf) Console{ *pixel_writer, kDesktopFGColor, kDesktopBGColor };
     printk("Welcome to Osilis!\n");
     SetLogLevel(kWarn);
 
-    mouse_cursor = new (mouse_cursor_buf)
-        MouseCursor{ pixel_writer, kDesktopBGColor, { 300, 200 } };
+    const std::array<MemoryType, 3> available_memory_types{
+        MemoryType::kEfiBootServicesCode,
+        MemoryType::kEfiBootServicesData,
+        MemoryType::kEfiConvertionalMemory,
+    };
+
+    printk("memory_map: %p\n", &memory_map);
+    for (uintptr_t iter = reinterpret_cast<uintptr_t>(memory_map.buffer);
+         iter < reinterpret_cast<uintptr_t>(memory_map.buffer) + memory_map.map_size;
+         iter += memory_map.descriptor_size) {
+        auto desc = reinterpret_cast<MemoryDescriptor*>(iter);
+        for (int i = 0; i < available_memory_types.size(); ++i) {
+            if (desc->type == available_memory_types[i]) {
+                printk("type = %u, phys = %08lx - %08lx, pages = %lu, attr = %08lx\n",
+                       desc->type,
+                       desc->physical_start,
+                       desc->physical_start + desc->number_of_pages * 4096 - 1,
+                       desc->number_of_pages,
+                       desc->attribute);
+            }
+        }
+    }
+
+    mouse_cursor =
+        new (mouse_cursor_buf) MouseCursor{ pixel_writer, kDesktopBGColor, { 300, 200 } };
 
     std::array<Message, 32> main_queue_data;
     ArrayQueue<Message> main_queue{ main_queue_data };
@@ -182,8 +190,7 @@ KernelMain(const FrameBufferConfig& frame_buffer_config) {
                 cs);
     LoadIDT(sizeof(idt) - 1, reinterpret_cast<uintptr_t>(&idt[0]));
 
-    const uint8_t bsp_local_apic_id =
-        *reinterpret_cast<const uint32_t*>(0xfee0020) >> 24;
+    const uint8_t bsp_local_apic_id = *reinterpret_cast<const uint32_t*>(0xfee0020) >> 24;
     pci::ConfigureMSIFixedDestination(*xhc_dev,
                                       bsp_local_apic_id,
                                       pci::MSITriggerMode::kLevel,
