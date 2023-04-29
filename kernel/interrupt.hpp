@@ -6,17 +6,9 @@
 
 #pragma once
 
+#include "x86_descriptor.hpp"
 #include <array>
 #include <cstdint>
-
-enum class DescriptorType {
-    kUpper8Bytes = 0,
-    kLDT = 2,
-    kTSSAvailable = 9,
-    kTSSBusy = 11,
-    kInterruptGate = 14,
-    kTrapGate = 15,
-};
 
 union InterruptDescriptorAttribute {
     uint16_t date;
