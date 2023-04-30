@@ -5,6 +5,7 @@
 #include "graphics.hpp"
 #include "interrupt.hpp"
 #include "logger.hpp"
+#include "memory_manager.hpp"
 #include "memory_map.hpp"
 #include "mouse.hpp"
 #include "paging.hpp"
@@ -45,6 +46,9 @@ printk(const char* format, ...) {
     console->PutString(s);
     return result;
 }
+
+char memory_manager_buf[sizeof(BitmapMemoryManager)];
+BitmapMemoryManager* memory_manager;
 
 char mouse_cursor_buf[sizeof(MouseCursor)];
 MouseCursor* mouse_cursor;
@@ -114,7 +118,7 @@ KernelMainNewStack(const FrameBufferConfig& frame_buffer_config_ref,
     const int kFrameWidth = frame_buffer_config.horizontal_resolution;
     const int kFrameHeight = frame_buffer_config.vertical_resolution;
 
-    FillRectangle(*pixel_writer, { 0, 0 }, { kFrameWidth, kFrameHeight - 50 }, { kDesktopBGColor });
+    FillRectangle(*pixel_writer, { 0, 0 }, { kFrameWidth, kFrameHeight - 50 }, kDesktopBGColor);
     FillRectangle(*pixel_writer, { 0, kFrameHeight - 50 }, { kFrameWidth, 50 }, { 1, 8, 17 });
     FillRectangle(*pixel_writer, { 0, kFrameHeight - 50 }, { kFrameWidth / 5, 50 }, { 80, 80, 80 });
     DrawRectangle(*pixel_writer, { 10, kFrameHeight - 40 }, { 30, 30 }, { 160, 160, 160 });
@@ -132,19 +136,27 @@ KernelMainNewStack(const FrameBufferConfig& frame_buffer_config_ref,
 
     SetupIdentityPageTable();
 
+    ::memory_manager = new (memory_manager_buf) BitmapMemoryManager;
+
     const auto memory_map_base = reinterpret_cast<uintptr_t>(memory_map.buffer);
+    uintptr_t available_end = 0;
     for (uintptr_t iter = memory_map_base; iter < memory_map_base + memory_map.map_size;
          iter += memory_map.descriptor_size) {
-        auto desc = reinterpret_cast<MemoryDescriptor*>(iter);
+        auto desc = reinterpret_cast<const MemoryDescriptor*>(iter);
+        if (available_end < desc->physical_start) {
+            memory_manager->MarkAllocated(FrameID{ available_end / kBytesPerFrame },
+                                          (desc->physical_start - available_end) / kBytesPerFrame);
+        }
+
+        const auto physical_end = desc->physical_start + desc->number_of_pages * kUEFIPageSize;
         if (IsAvailable(static_cast<MemoryType>(desc->type))) {
-            printk("type = %u, phys = %08lx - %08lx, pages = %lu, attr = %08lx\n",
-                   desc->type,
-                   desc->physical_start,
-                   desc->physical_start + desc->number_of_pages * 4096 - 1,
-                   desc->number_of_pages,
-                   desc->attribute);
+            available_end = physical_end;
+        } else {
+            memory_manager->MarkAllocated(FrameID{ desc->physical_start / kBytesPerFrame },
+                                          desc->number_of_pages * kUEFIPageSize / kBytesPerFrame);
         }
     }
+    memory_manager->SetMemoryRange(FrameID{ 1 }, FrameID{ available_end / kBytesPerFrame });
 
     mouse_cursor =
         new (mouse_cursor_buf) MouseCursor{ pixel_writer, kDesktopBGColor, { 300, 200 } };
@@ -190,14 +202,13 @@ KernelMainNewStack(const FrameBufferConfig& frame_buffer_config_ref,
             xhc_dev->function);
     }
 
-    const uint16_t cs = GetCS();
     SetIDTEntry(idt[InterruptVector::kXHCI],
                 MakeIDTAttr(DescriptorType::kInterruptGate, 0),
                 reinterpret_cast<uint64_t>(IntHandlerXHCI),
-                cs);
+                kernel_cs);
     LoadIDT(sizeof(idt) - 1, reinterpret_cast<uintptr_t>(&idt[0]));
 
-    const uint8_t bsp_local_apic_id = *reinterpret_cast<const uint32_t*>(0xfee0020) >> 24;
+    const uint8_t bsp_local_apic_id = *reinterpret_cast<const uint32_t*>(0xfee00020) >> 24;
     pci::ConfigureMSIFixedDestination(*xhc_dev,
                                       bsp_local_apic_id,
                                       pci::MSITriggerMode::kLevel,
@@ -224,7 +235,6 @@ KernelMainNewStack(const FrameBufferConfig& frame_buffer_config_ref,
     xhc.Run();
 
     ::xhc = &xhc;
-    __asm__("sti");
 
     usb::HIDMouseDriver::default_observer = MouseObserver;
 

@@ -14,6 +14,7 @@ struct MemoryMap {
 struct MemoryDescriptor {
     uint32_t type;
     uintptr_t physical_start;
+    uintptr_t virtual_start;
     uint64_t number_of_pages;
     uint64_t attribute;
 };
@@ -27,7 +28,7 @@ enum class MemoryType {
     kEfiBootServicesData,
     kEfiRuntimeServicesCode,
     kEfiRuntimeServicesData,
-    kEfiConvertionalMemory,
+    kEfiConventionalMemory,
     kEfiUnusableMemory,
     kEfiACPIReclaimMemory,
     kEfiACPIMemoryNVS,
@@ -52,9 +53,8 @@ inline bool
 IsAvailable(MemoryType memory_type) {
     return memory_type == MemoryType::kEfiBootServicesCode ||
            memory_type == MemoryType::kEfiBootServicesData ||
-           memory_type == MemoryType::kEfiConvertionalMemory;
+           memory_type == MemoryType::kEfiConventionalMemory;
 }
 
 const int kUEFIPageSize = 4096;
-
 #endif

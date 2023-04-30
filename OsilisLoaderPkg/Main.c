@@ -13,7 +13,6 @@
 #include <Protocol/SimpleFileSystem.h>
 #include <Uefi.h>
 
-// UEFIからメモリマップを取得する
 EFI_STATUS
 GetMemoryMap(struct MemoryMap* map) {
     if (map->buffer == NULL) {
@@ -68,7 +67,6 @@ GetMemoryTypeUnicode(EFI_MEMORY_TYPE type) {
     }
 }
 
-// メモリマップをファイルに保存
 EFI_STATUS
 SaveMemoryMap(struct MemoryMap* map, EFI_FILE_PROTOCOL* file) {
     EFI_STATUS status;
@@ -99,7 +97,6 @@ SaveMemoryMap(struct MemoryMap* map, EFI_FILE_PROTOCOL* file) {
                           desc->PhysicalStart,
                           desc->NumberOfPages,
                           desc->Attribute & 0xffffflu);
-
         status = file->Write(file, &len, buf);
         if (EFI_ERROR(status)) {
             return status;
@@ -109,7 +106,6 @@ SaveMemoryMap(struct MemoryMap* map, EFI_FILE_PROTOCOL* file) {
     return EFI_SUCCESS;
 }
 
-// ファイルを開く準備
 EFI_STATUS
 OpenRootDir(EFI_HANDLE image_handle, EFI_FILE_PROTOCOL** root) {
     EFI_STATUS status;
@@ -126,12 +122,12 @@ OpenRootDir(EFI_HANDLE image_handle, EFI_FILE_PROTOCOL** root) {
         return status;
     }
 
-    gBS->OpenProtocol(loaded_image->DeviceHandle,
-                      &gEfiSimpleFileSystemProtocolGuid,
-                      (VOID**)&fs,
-                      image_handle,
-                      NULL,
-                      EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL);
+    status = gBS->OpenProtocol(loaded_image->DeviceHandle,
+                               &gEfiSimpleFileSystemProtocolGuid,
+                               (VOID**)&fs,
+                               image_handle,
+                               NULL,
+                               EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL);
     if (EFI_ERROR(status)) {
         return status;
     }
@@ -142,16 +138,15 @@ OpenRootDir(EFI_HANDLE image_handle, EFI_FILE_PROTOCOL** root) {
 EFI_STATUS
 OpenGOP(EFI_HANDLE image_handle, EFI_GRAPHICS_OUTPUT_PROTOCOL** gop) {
     EFI_STATUS status;
-    // Graphics Output Protocol(GOP)のハンドルを取得
     UINTN num_gop_handles = 0;
     EFI_HANDLE* gop_handles = NULL;
+
     status = gBS->LocateHandleBuffer(
         ByProtocol, &gEfiGraphicsOutputProtocolGuid, NULL, &num_gop_handles, &gop_handles);
     if (EFI_ERROR(status)) {
         return status;
     }
 
-    // GOPのハンドルを使用して、グラフィックス出力プロトコルを開く
     status = gBS->OpenProtocol(gop_handles[0],
                                &gEfiGraphicsOutputProtocolGuid,
                                (VOID**)gop,
@@ -162,19 +157,16 @@ OpenGOP(EFI_HANDLE image_handle, EFI_GRAPHICS_OUTPUT_PROTOCOL** gop) {
         return status;
     }
 
-    // バッファ開放
     FreePool(gop_handles);
 
     return EFI_SUCCESS;
 }
 
-// ピクセルフォーマットの値に応じて、Unicode文字列を返す
 const CHAR16*
 GetPixelFormatUnicode(EFI_GRAPHICS_PIXEL_FORMAT fmt) {
     switch (fmt) {
         case PixelRedGreenBlueReserved8BitPerColor:
             return L"PixelRedGreenBlueReserved8BitPerColor";
-            break;
         case PixelBlueGreenRedReserved8BitPerColor:
             return L"PixelBlueGreenRedReserved8BitPerColor";
         case PixelBitMask:
@@ -190,51 +182,33 @@ GetPixelFormatUnicode(EFI_GRAPHICS_PIXEL_FORMAT fmt) {
 
 void
 Halt(void) {
-    while (1) {
+    while (1)
         __asm__("hlt");
-    }
 }
 
-// ELFファイルのロードアドレスの範囲を取得
 void
 CalcLoadAddressRange(Elf64_Ehdr* ehdr, UINT64* first, UINT64* last) {
-    // プログラムヘッダテーブルの先頭アドレスを計算
     Elf64_Phdr* phdr = (Elf64_Phdr*)((UINT64)ehdr + ehdr->e_phoff);
-
-    // ロードアドレスを初期化する
     *first = MAX_UINT64;
     *last = 0;
-
-    // プログラムヘッダテーブルをループしてロードアドレスの範囲を計算
     for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i) {
-        if (phdr[i].p_type != PT_LOAD) {
+        if (phdr[i].p_type != PT_LOAD)
             continue;
-        }
-        // ロードアドレスの範囲を更新する
         *first = MIN(*first, phdr[i].p_vaddr);
         *last = MAX(*last, phdr[i].p_vaddr + phdr[i].p_memsz);
     }
 }
 
-// ELFファイルからロードセグメントをコピー
 void
 CopyLoadSegments(Elf64_Ehdr* ehdr) {
-    // プログラムヘッダテーブルの先頭アドレスを計算
     Elf64_Phdr* phdr = (Elf64_Phdr*)((UINT64)ehdr + ehdr->e_phoff);
-
-    // プログラムヘッダテーブルをループしてロードセグメントをコピー
     for (Elf64_Half i = 0; i < ehdr->e_phnum; ++i) {
-        if (phdr[i].p_type != PT_LOAD) {
+        if (phdr[i].p_type != PT_LOAD)
             continue;
-        }
 
-        // ファイル上のロードセグメントの先頭アドレスを計算
         UINT64 segm_in_file = (UINT64)ehdr + phdr[i].p_offset;
-
-        // ロードセグメントをメモリ上にコピー
         CopyMem((VOID*)phdr[i].p_vaddr, (VOID*)segm_in_file, phdr[i].p_filesz);
 
-        // ロードセグメントの残りの部分をゼロで埋める
         UINTN remain_bytes = phdr[i].p_memsz - phdr[i].p_filesz;
         SetMem((VOID*)(phdr[i].p_vaddr + phdr[i].p_filesz), remain_bytes, 0);
     }
@@ -243,20 +217,17 @@ CopyLoadSegments(Elf64_Ehdr* ehdr) {
 EFI_STATUS EFIAPI
 UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
     EFI_STATUS status;
+
     Print(L"Hello, Osilis World!\n");
 
-    // メモリマップの初期化
     CHAR8 memmap_buf[4096 * 4];
     struct MemoryMap memmap = { sizeof(memmap_buf), memmap_buf, 0, 0, 0, 0 };
-
-    // UEFIからメモリマップを取得する
     status = GetMemoryMap(&memmap);
     if (EFI_ERROR(status)) {
         Print(L"failed to get memory map: %r\n", status);
         Halt();
     }
 
-    // ファイルを開く準備
     EFI_FILE_PROTOCOL* root_dir;
     status = OpenRootDir(image_handle, &root_dir);
     if (EFI_ERROR(status)) {
@@ -264,7 +235,6 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
         Halt();
     }
 
-    // "memmap"を開く
     EFI_FILE_PROTOCOL* memmap_file;
     status = root_dir->Open(root_dir,
                             &memmap_file,
@@ -275,7 +245,6 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
         Print(L"failed to open file '\\memmap': %r\n", status);
         Print(L"Ignored.\n");
     } else {
-        // メモリマップをファイルに保存
         status = SaveMemoryMap(&memmap, memmap_file);
         if (EFI_ERROR(status)) {
             Print(L"failed to save memory map: %r\n", status);
@@ -295,25 +264,21 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
         Halt();
     }
 
-    // GOP モードの情報を表示する
     Print(L"Resolution: %ux%u, Pixel Format: %s, %u pixels/line\n",
           gop->Mode->Info->HorizontalResolution,
           gop->Mode->Info->VerticalResolution,
           GetPixelFormatUnicode(gop->Mode->Info->PixelFormat),
           gop->Mode->Info->PixelsPerScanLine);
-    // フレームバッファの情報を表示する
     Print(L"Frame Buffer: 0x%0lx - 0x%0lx, Size: %lu bytes\n",
           gop->Mode->FrameBufferBase,
           gop->Mode->FrameBufferBase + gop->Mode->FrameBufferSize,
           gop->Mode->FrameBufferSize);
 
-    // フレームバッファを白色で塗りつぶす
     UINT8* frame_buffer = (UINT8*)gop->Mode->FrameBufferBase;
-    for (UINTN i = 0; i < gop->Mode->FrameBufferSize; i++) {
+    for (UINTN i = 0; i < gop->Mode->FrameBufferSize; ++i) {
         frame_buffer[i] = 255;
     }
 
-    // kernelを開く
     EFI_FILE_PROTOCOL* kernel_file;
     status = root_dir->Open(root_dir, &kernel_file, L"\\kernel.elf", EFI_FILE_MODE_READ, 0);
     if (EFI_ERROR(status)) {
@@ -321,7 +286,6 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
         Halt();
     }
 
-    // kernelのサイズを取得する
     UINTN file_info_size = sizeof(EFI_FILE_INFO) + sizeof(CHAR16) * 12;
     UINT8 file_info_buffer[file_info_size];
     status =
@@ -330,10 +294,10 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
         Print(L"failed to get file information: %r\n", status);
         Halt();
     }
+
     EFI_FILE_INFO* file_info = (EFI_FILE_INFO*)file_info_buffer;
     UINTN kernel_file_size = file_info->FileSize;
 
-    // kernelの読み込みとメモリへの配置
     VOID* kernel_buffer;
     status = gBS->AllocatePool(EfiLoaderData, kernel_file_size, &kernel_buffer);
     if (EFI_ERROR(status)) {
@@ -346,12 +310,10 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
         Halt();
     }
 
-    // LoadされたKernelのメモリアドレス範囲を計算
     Elf64_Ehdr* kernel_ehdr = (Elf64_Ehdr*)kernel_buffer;
     UINT64 kernel_first_addr, kernel_last_addr;
     CalcLoadAddressRange(kernel_ehdr, &kernel_first_addr, &kernel_last_addr);
 
-    // ページ数を計算してメモリを割り当てる
     UINTN num_pages = (kernel_last_addr - kernel_first_addr + 0xfff) / 0x1000;
     status = gBS->AllocatePages(AllocateAddress, EfiLoaderData, num_pages, &kernel_first_addr);
     if (EFI_ERROR(status)) {
@@ -359,28 +321,22 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
         Halt();
     }
 
-    // Kernelを割り当てたメモリにコピーする
     CopyLoadSegments(kernel_ehdr);
-    // コピーしたKernelのメモリアドレス範囲を出力する
     Print(L"Kernel: 0x%0lx - 0x%0lx\n", kernel_first_addr, kernel_last_addr);
 
-    // Kernelを割り当てたメモリ領域以外のメモリを解放する
     status = gBS->FreePool(kernel_buffer);
     if (EFI_ERROR(status)) {
         Print(L"failed to free pool: %r\n", status);
         Halt();
     }
 
-    // メモリマップの取得とBoot終了
     status = gBS->ExitBootServices(image_handle, memmap.map_key);
     if (EFI_ERROR(status)) {
-        // メモリマップの取得に失敗した場合はエラーを表示して停止
         status = GetMemoryMap(&memmap);
         if (EFI_ERROR(status)) {
             Print(L"failed to get memory map: %r\n", status);
             Halt();
         }
-        // Bootの終了を再度試みる
         status = gBS->ExitBootServices(image_handle, memmap.map_key);
         if (EFI_ERROR(status)) {
             Print(L"Could not exit boot service: %r\n", status);
@@ -388,7 +344,8 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
         }
     }
 
-    // kernelにフレーム情報を渡す
+    UINT64 entry_addr = *(UINT64*)(kernel_first_addr + 24);
+
     struct FrameBufferConfig config = { (UINT8*)gop->Mode->FrameBufferBase,
                                         gop->Mode->Info->PixelsPerScanLine,
                                         gop->Mode->Info->HorizontalResolution,
@@ -406,8 +363,6 @@ UefiMain(EFI_HANDLE image_handle, EFI_SYSTEM_TABLE* system_table) {
             Halt();
     }
 
-    // kernelのエントリーポイントを実行する
-    UINT64 entry_addr = *(UINT64*)(kernel_first_addr + 24);
     typedef void EntryPointType(const struct FrameBufferConfig*, const struct MemoryMap*);
     EntryPointType* entry_point = (EntryPointType*)entry_addr;
     entry_point(&config, &memmap);
