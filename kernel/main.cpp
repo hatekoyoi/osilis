@@ -13,6 +13,7 @@
 #include "pci.hpp"
 #include "queue.hpp"
 #include "segment.hpp"
+#include "timer.hpp"
 #include "usb/classdriver/mouse.hpp"
 #include "usb/device.hpp"
 #include "usb/memory.hpp"
@@ -54,7 +55,11 @@ unsigned int mouse_layer_id;
 void
 MouseObserver(int8_t displacement_x, int8_t displacement_y) {
     layer_manager->MoveRelative(mouse_layer_id, { displacement_x, displacement_y });
+    StartLAPICTimer();
     layer_manager->Draw();
+    auto elapsed = LAPICTimerElapsed();
+    StopLAPICTimer();
+    printk("MouseObserver: elapsed = %u\n", elapsed);
 }
 
 void
@@ -120,6 +125,8 @@ KernelMainNewStack(const FrameBufferConfig& frame_buffer_config_ref,
     console->SetWriter(pixel_writer);
     printk("Welcome to Osilis!\n");
     SetLogLevel(kWarn);
+
+    InitializeLAPICTimer();
 
     SetupSegments();
 
