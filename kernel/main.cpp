@@ -13,7 +13,6 @@
 #include "pci.hpp"
 #include "queue.hpp"
 #include "segment.hpp"
-#include "timer.hpp"
 #include "usb/classdriver/mouse.hpp"
 #include "usb/device.hpp"
 #include "usb/memory.hpp"
@@ -43,12 +42,6 @@ printk(const char* format, ...) {
     result = vsprintf(s, format, ap);
     va_end(ap);
 
-    StartLAPICTimer();
-    console->PutString(s);
-    auto elapsed = LAPICTimerElapsed();
-    StopLAPICTimer();
-
-    sprintf(s, "[%9d]", elapsed);
     console->PutString(s);
     return result;
 }
@@ -57,15 +50,17 @@ char memory_manager_buf[sizeof(BitmapMemoryManager)];
 BitmapMemoryManager* memory_manager;
 
 unsigned int mouse_layer_id;
+Vector2D<int> screen_size;
+Vector2D<int> mouse_position;
 
 void
 MouseObserver(int8_t displacement_x, int8_t displacement_y) {
-    layer_manager->MoveRelative(mouse_layer_id, { displacement_x, displacement_y });
-    StartLAPICTimer();
+    auto newpos = mouse_position + Vector2D<int>{ displacement_x, displacement_y };
+    newpos = ElementMin(newpos, screen_size + Vector2D<int>{ -1, -1 });
+    mouse_position = ElementMax(newpos, { 0, 0 });
+
+    layer_manager->Move(mouse_layer_id, mouse_position);
     layer_manager->Draw();
-    auto elapsed = LAPICTimerElapsed();
-    StopLAPICTimer();
-    printk("MouseObserver: elapsed = %u\n", elapsed);
 }
 
 void
@@ -131,8 +126,6 @@ KernelMainNewStack(const FrameBufferConfig& frame_buffer_config_ref,
     console->SetWriter(pixel_writer);
     printk("Welcome to Osilis!\n");
     SetLogLevel(kWarn);
-
-    InitializeLAPICTimer();
 
     SetupSegments();
 
@@ -263,11 +256,11 @@ KernelMainNewStack(const FrameBufferConfig& frame_buffer_config_ref,
         }
     }
 
-    const int kFrameWidth = frame_buffer_config.horizontal_resolution;
-    const int kFrameHeight = frame_buffer_config.vertical_resolution;
+    screen_size.x = frame_buffer_config.horizontal_resolution;
+    screen_size.y = frame_buffer_config.vertical_resolution;
 
     auto bgwindow =
-        std::make_shared<Window>(kFrameWidth, kFrameHeight, frame_buffer_config.pixel_format);
+        std::make_shared<Window>(screen_size.x, screen_size.y, frame_buffer_config.pixel_format);
     auto bgwriter = bgwindow->Writer();
 
     DrawDesktop(*bgwriter);
@@ -277,6 +270,12 @@ KernelMainNewStack(const FrameBufferConfig& frame_buffer_config_ref,
         kMouseCursorWidth, kMouseCursorHeight, frame_buffer_config.pixel_format);
     mouse_window->SetTransparentColor(kMouseTransparentColor);
     DrawMouseCursor(mouse_window->Writer(), { 0, 0 });
+    mouse_position = { 200, 200 };
+
+    auto main_window = std::make_shared<Window>(160, 68, frame_buffer_config.pixel_format);
+    DrawWindow(*main_window->Writer(), "Hello Window");
+    WriteString(*main_window->Writer(), { 24, 28 }, "Welcome to", { 0, 0, 0 });
+    WriteString(*main_window->Writer(), { 24, 44 }, " Osilis world!", { 0, 0, 0 });
 
     FrameBuffer screen;
     if (auto err = screen.Initialize(frame_buffer_config)) {
@@ -291,10 +290,13 @@ KernelMainNewStack(const FrameBufferConfig& frame_buffer_config_ref,
     layer_manager->SetWriter(&screen);
 
     auto bglayer_id = layer_manager->NewLayer().SetWindow(bgwindow).Move({ 0, 0 }).ID();
-    mouse_layer_id = layer_manager->NewLayer().SetWindow(mouse_window).Move({ 200, 200 }).ID();
+    mouse_layer_id = layer_manager->NewLayer().SetWindow(mouse_window).Move(mouse_position).ID();
+    auto main_window_layer_id =
+        layer_manager->NewLayer().SetWindow(main_window).Move({ 300, 100 }).ID();
 
     layer_manager->UpDown(bglayer_id, 0);
     layer_manager->UpDown(mouse_layer_id, 1);
+    layer_manager->UpDown(main_window_layer_id, 1);
     layer_manager->Draw();
 
     while (true) {
