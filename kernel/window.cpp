@@ -26,22 +26,21 @@ Window::Window(int width, int height, PixelFormat shadow_format)
 }
 
 void
-Window::DrawTo(FrameBuffer& dst, Vector2D<int> position) {
+Window::DrawTo(FrameBuffer& dst, Vector2D<int> pos, const Rectangle<int>& area) {
     if (!transparent_color_) {
-        dst.Copy(position, shadow_buffer_);
+        Rectangle<int> window_area{ pos, Size() };
+        Rectangle<int> intersection = area & window_area;
+        dst.Copy(intersection.pos, shadow_buffer_, { intersection.pos - pos, intersection.size });
         return;
     }
 
     const auto tc = transparent_color_.value();
     auto& writer = dst.Writer();
-    for (int y = std::max(0, 0 - position.y); y < std::min(Height(), writer.Height() - position.y);
-         ++y) {
-        for (int x = std::max(0, 0 - position.x);
-             x < std::min(Width(), writer.Width() - position.x);
-             ++x) {
+    for (int y = std::max(0, 0 - pos.y); y < std::min(Height(), writer.Height() - pos.y); ++y) {
+        for (int x = std::max(0, 0 - pos.x); x < std::min(Width(), writer.Width() - pos.x); ++x) {
             const auto c = At(Vector2D<int>{ x, y });
             if (c != tc) {
-                writer.Write(position + Vector2D<int>{ x, y }, c);
+                writer.Write(pos + Vector2D<int>{ x, y }, c);
             }
         }
     }
@@ -76,6 +75,11 @@ Window::Width() const {
 int
 Window::Height() const {
     return height_;
+}
+
+Vector2D<int>
+Window::Size() const {
+    return { width_, height_ };
 }
 
 void
