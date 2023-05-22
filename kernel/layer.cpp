@@ -27,6 +27,17 @@ Layer::GetPosition() const {
 }
 
 Layer&
+Layer::SetDraggable(bool draggable) {
+    draggable_ = draggable;
+    return *this;
+}
+
+bool
+Layer::IsDraggable() const {
+    return draggable_;
+}
+
+Layer&
 Layer::Move(Vector2D<int> pos) {
     pos_ = pos;
     return *this;
