@@ -5,14 +5,10 @@ namespace {
     using namespace pci;
 
     // CONFIG_ADDRESS用の32ビット整数を生成する
-    uint32_t MakeAddress(uint8_t bus,
-                         uint8_t device,
-                         uint8_t function,
-                         uint8_t reg_addr) {
+    uint32_t MakeAddress(uint8_t bus, uint8_t device, uint8_t function, uint8_t reg_addr) {
         auto shl = [](uint32_t x, unsigned int bits) { return x << bits; };
 
-        return shl(1, 31) | shl(bus, 16) | shl(device, 11) | shl(function, 8) |
-               (reg_addr & 0xfcu);
+        return shl(1, 31) | shl(bus, 16) | shl(device, 11) | shl(function, 8) | (reg_addr & 0xfcu);
     }
 
     // devices[num_device]に情報を書き込みnum_deviceをインクリメントする
@@ -123,9 +119,7 @@ namespace {
      * @param cap_addr MSI ケーパビリティレジスタのコンフィグレーション空間アドレス
      * @param msi_cap 書き込む値
      */
-    void WriteMSICapability(const Device& dev,
-                            uint8_t cap_addr,
-                            const MSICapability& msi_cap) {
+    void WriteMSICapability(const Device& dev, uint8_t cap_addr, const MSICapability& msi_cap) {
         WriteConfReg(dev, cap_addr, msi_cap.header.data);
         WriteConfReg(dev, cap_addr + 4, msi_cap.msg_addr);
 
@@ -154,8 +148,7 @@ namespace {
         auto msi_cap = ReadMSICapability(dev, cap_addr);
 
         if (msi_cap.header.bits.multi_msg_capable <= num_vector_exponent) {
-            msi_cap.header.bits.multi_msg_enable =
-                msi_cap.header.bits.multi_msg_capable;
+            msi_cap.header.bits.multi_msg_enable = msi_cap.header.bits.multi_msg_capable;
         } else {
             msi_cap.header.bits.multi_msg_enable = num_vector_exponent;
         }
@@ -275,8 +268,7 @@ namespace pci {
         }
 
         const auto bar_upper = ReadConfReg(device, addr + 4);
-        return { bar | (static_cast<uint64_t>(bar_upper) << 32),
-                 MAKE_ERROR(Error::kSuccess) };
+        return { bar | (static_cast<uint64_t>(bar_upper) << 32), MAKE_ERROR(Error::kSuccess) };
     }
 
     CapabilityHeader ReadCapabilityHeader(const Device& dev, uint8_t addr) {
@@ -302,8 +294,7 @@ namespace pci {
         }
 
         if (msi_cap_addr) {
-            return ConfigureMSIRegister(
-                dev, msi_cap_addr, msg_addr, msg_data, num_vector_exponent);
+            return ConfigureMSIRegister(dev, msi_cap_addr, msg_addr, msg_data, num_vector_exponent);
         } else if (msix_cap_addr) {
             return ConfigureMSIXRegister(
                 dev, msix_cap_addr, msg_addr, msg_data, num_vector_exponent);
@@ -318,8 +309,7 @@ namespace pci {
                                        uint8_t vector,
                                        unsigned int num_vector_exponent) {
         uint32_t msg_addr = 0xfee00000u | (apic_id << 12);
-        uint32_t msg_data =
-            (static_cast<uint32_t>(delivery_mode) << 8) | vector;
+        uint32_t msg_data = (static_cast<uint32_t>(delivery_mode) << 8) | vector;
         if (trigger_mode == MSITriggerMode::kLevel) {
             msg_data |= 0xc000;
         }
